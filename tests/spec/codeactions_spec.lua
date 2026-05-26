@@ -63,6 +63,79 @@ describe("codeactions-on-save", function()
     ]]), h.lines())
   end)
 
+  it("preserves buffer content when multiple kinds yield interacting edits (issue #7)", function()
+    h.user_setup({
+      { pattern = { "*.fake" }, kinds = { "source.addMissingImports", "source.organizeImports" }, timeout_ms = 5000 },
+    })
+    h.buffer([[
+      line 1
+      line 2
+      line 3
+    ]])
+    h.fake_lsp(function()
+      return {
+        handlers = {
+          ["textDocument/codeAction"] = function(params, state)
+            local uri = params.textDocument.uri
+            local text = state.docs[uri] or ""
+
+            local row, row_of_line_2 = 0, nil
+            for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+              if line == "line 2" then
+                row_of_line_2 = row
+                break
+              end
+              row = row + 1
+            end
+
+            local only = {}
+            for _, k in ipairs(params.context.only or {}) do
+              only[k] = true
+            end
+
+            local actions = {}
+            if only["source.addMissingImports"] then
+              table.insert(actions, {
+                title = "Insert ADDED at top",
+                kind = "source.addMissingImports",
+                edit = { changes = { [uri] = { {
+                  range = {
+                    start = { line = 0, character = 0 },
+                    ["end"] = { line = 0, character = 0 },
+                  },
+                  newText = "ADDED\n",
+                } } } },
+              })
+            end
+            if only["source.organizeImports"] and row_of_line_2 then
+              table.insert(actions, {
+                title = "Replace line 2 with MODIFIED",
+                kind = "source.organizeImports",
+                edit = { changes = { [uri] = { {
+                  range = {
+                    start = { line = row_of_line_2, character = 0 },
+                    ["end"] = { line = row_of_line_2 + 1, character = 0 },
+                  },
+                  newText = "MODIFIED\n",
+                } } } },
+              })
+            end
+            return actions
+          end,
+        },
+      }
+    end)
+
+    vim.cmd("silent write")
+
+    assert.are.same(h.text([[
+      ADDED
+      line 1
+      MODIFIED
+      line 3
+    ]]), h.lines())
+  end)
+
   it("applies actions that require codeAction/resolve", function()
     h.user_setup({
       { pattern = { "*.fake" }, kinds = { "source.organizeImports" }, timeout_ms = 5000 },
