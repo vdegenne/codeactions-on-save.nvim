@@ -3,9 +3,11 @@
 ---@alias ActionTimeoutMs integer Timeout for synchronous requests, defaulting to 100ms
 
 ---@alias Register fun(pattern: PatternList, kinds: KindList, timeout_ms?: ActionTimeoutMs): nil
+---@alias Apply fun(kinds: KindList, buf: integer, timeout_ms?: ActionTimeoutMs): nil
 
 ---@class CodeActionsOnSaveMain
 ---@field register Register
+---@field apply Apply
 local M = {}
 
 ---@param action table
@@ -59,8 +61,9 @@ end
 
 ---@param kinds KindList
 ---@param buf integer
----@param timeout_ms ActionTimeoutMs
-local function handle_write_pre(kinds, buf, timeout_ms)
+---@param timeout_ms? ActionTimeoutMs
+function M.apply(kinds, buf, timeout_ms)
+  timeout_ms = timeout_ms or 100
   for _, kind in ipairs(kinds) do
     apply_kind(kind, buf, timeout_ms)
   end
@@ -70,7 +73,7 @@ function M.register(pattern, kinds, timeout_ms)
   vim.api.nvim_create_autocmd("BufWritePre", {
     pattern = pattern,
     callback = function(args)
-      handle_write_pre(kinds, args.buf, timeout_ms or 100)
+      M.apply(kinds, args.buf, timeout_ms)
     end,
     desc = "Auto-run code actions " .. table.concat(kinds, ", ") .. " on save",
   })
