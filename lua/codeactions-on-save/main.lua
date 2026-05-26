@@ -23,7 +23,7 @@ local function handle_action_sync(action, buf, timeout_ms, attempts)
   if action.edit then
     vim.lsp.util.apply_workspace_edit(action.edit, "utf-16")
   elseif action.command then
-    vim.lsp.buf.execute_command(action.command)
+    vim.lsp.buf_request_sync(buf, "workspace/executeCommand", action.command, timeout_ms)
   else
     -- neovim:runtime/lua/vim/lsp/buf.lua shows how to run a code action
     -- synchronously. This section is based on that.
