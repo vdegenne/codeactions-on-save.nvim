@@ -36,12 +36,12 @@ local function handle_action_sync(action, buf, timeout_ms, attempts)
   end
 end
 
----@param kinds KindList
+---@param kind string
 ---@param buf integer
 ---@param timeout_ms ActionTimeoutMs
-local function handle_write_pre(kinds, buf, timeout_ms)
+local function apply_kind(kind, buf, timeout_ms)
   local params = vim.lsp.util.make_range_params(0, "utf-8")
-  params.context = { diagnostics = {}, only = kinds }
+  params.context = { diagnostics = {}, only = { kind } }
 
   local results = vim.lsp.buf_request_sync(buf, "textDocument/codeAction", params, timeout_ms)
   if not results then
@@ -50,12 +50,19 @@ local function handle_write_pre(kinds, buf, timeout_ms)
 
   for _, result in pairs(results) do
     for _, action in pairs(result.result or {}) do
-      for _, kind in pairs(kinds) do
-        if action.kind == kind then
-          handle_action_sync(action, buf, timeout_ms, 0)
-        end
+      if action.kind == kind then
+        handle_action_sync(action, buf, timeout_ms, 0)
       end
     end
+  end
+end
+
+---@param kinds KindList
+---@param buf integer
+---@param timeout_ms ActionTimeoutMs
+local function handle_write_pre(kinds, buf, timeout_ms)
+  for _, kind in ipairs(kinds) do
+    apply_kind(kind, buf, timeout_ms)
   end
 end
 
