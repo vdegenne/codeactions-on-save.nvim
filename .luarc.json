@@ -1,0 +1,21 @@
+{
+  "runtime.version": "LuaJIT",
+  "diagnostics.globals": [
+    "vim",
+    "describe",
+    "it",
+    "before_each",
+    "after_each",
+    "pending",
+    "setup",
+    "teardown"
+  ],
+  "diagnostics.disable": ["undefined-field"],
+  "runtime.path": [
+    "?.lua",
+    "?/init.lua",
+    "lua/?.lua",
+    "lua/?/init.lua",
+    "tests/?.lua"
+  ]
+}

@@ -1,0 +1,30 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        neovim: ["v0.11.0", "stable", "nightly"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim }}
+
+      - name: Cache plenary
+        uses: actions/cache@v4
+        with:
+          path: .tests/plenary.nvim
+          key: plenary-${{ runner.os }}
+
+      - name: Run tests
+        run: make test
