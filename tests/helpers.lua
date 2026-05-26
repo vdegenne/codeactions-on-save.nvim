@@ -4,6 +4,12 @@ local plugin = require("codeactions-on-save")
 local server_path = vim.fn.fnamemodify("tests/fake_lsp/server.lua", ":p")
 local active
 local registered_patterns = {}
+local stubs = {}
+
+function M.stub(target, key, value)
+  table.insert(stubs, { target = target, key = key, original = target[key] })
+  target[key] = value
+end
 
 local function wait_initialized(client_id)
   local ok = vim.wait(5000, function()
@@ -98,6 +104,12 @@ function M.lines()
 end
 
 function M.cleanup()
+  for i = #stubs, 1, -1 do
+    local s = stubs[i]
+    s.target[s.key] = s.original
+  end
+  stubs = {}
+
   for _, pattern in ipairs(registered_patterns) do
     pcall(vim.api.nvim_clear_autocmds, { event = "BufWritePre", pattern = pattern })
   end

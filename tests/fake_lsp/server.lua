@@ -19,6 +19,7 @@ local handlers = {
       capabilities = {
         textDocumentSync = 1,
         codeActionProvider = { resolveProvider = false },
+        executeCommandProvider = { commands = {} },
       },
       serverInfo = { name = "fake-lsp" },
     }
@@ -48,6 +49,12 @@ for method, fn in pairs(scenario.notifications or {}) do notifications[method] =
 local function send(msg)
   local body = vim.json.encode(msg)
   stdout:write("Content-Length: " .. #body .. "\r\n\r\n" .. body)
+end
+
+local next_request_id = 0
+state.send_request = function(method, params)
+  next_request_id = next_request_id + 1
+  send({ jsonrpc = "2.0", id = next_request_id, method = method, params = params })
 end
 
 local function dispatch(msg)
