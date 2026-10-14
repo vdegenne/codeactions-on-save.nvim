@@ -15,68 +15,76 @@ local M = {}
 ---@param timeout_ms ActionTimeoutMs
 ---@param attempts integer
 local function handle_action_sync(action, buf, timeout_ms, attempts)
-  if attempts > 3 then
-    vim.notify("Max resolve attempts reached for action " .. action.kind, vim.log.levels.WARN)
-    return
-  end
+	if attempts > 3 then
+		vim.notify("Max resolve attempts reached for action " .. action.kind, vim.log.levels.WARN)
+		return
+	end
 
-  if action.edit then
-    vim.lsp.util.apply_workspace_edit(action.edit, "utf-16")
-  elseif action.command then
-    vim.lsp.buf_request_sync(buf, "workspace/executeCommand", action.command, timeout_ms)
-  else
-    -- neovim:runtime/lua/vim/lsp/buf.lua shows how to run a code action
-    -- synchronously. This section is based on that.
-    local resolve_result = vim.lsp.buf_request_sync(buf, "codeAction/resolve", action, timeout_ms)
-    if resolve_result then
-      for _, resolved_action in pairs(resolve_result) do
-        handle_action_sync(resolved_action.result, buf, timeout_ms, attempts + 1)
-      end
-    else
-      vim.notify("Failed to resolve code action " .. action.kind .. " without edit or command", vim.log.levels.WARN)
-    end
-  end
+	if action.edit then
+		vim.api.nvim_buf_call(buf, function()
+			pcall(function()
+				vim.cmd("undojoin")
+			end)
+			vim.lsp.util.apply_workspace_edit(action.edit, "utf-16")
+		end)
+	elseif action.command then
+		vim.lsp.buf_request_sync(buf, "workspace/executeCommand", action.command, timeout_ms)
+	else
+		-- neovim:runtime/lua/vim/lsp/buf.lua shows how to run a code action
+		-- synchronously. This section is based on that.
+		local resolve_result = vim.lsp.buf_request_sync(buf, "codeAction/resolve", action, timeout_ms)
+		if resolve_result then
+			for _, resolved_action in pairs(resolve_result) do
+				handle_action_sync(resolved_action.result, buf, timeout_ms, attempts + 1)
+			end
+		else
+			vim.notify(
+				"Failed to resolve code action " .. action.kind .. " without edit or command",
+				vim.log.levels.WARN
+			)
+		end
+	end
 end
 
 ---@param kind string
 ---@param buf integer
 ---@param timeout_ms ActionTimeoutMs
 local function apply_kind(kind, buf, timeout_ms)
-  local params = vim.lsp.util.make_range_params(0, "utf-8")
-  params.context = { diagnostics = {}, only = { kind } }
+	local params = vim.lsp.util.make_range_params(0, "utf-8")
+	params.context = { diagnostics = {}, only = { kind } }
 
-  local results = vim.lsp.buf_request_sync(buf, "textDocument/codeAction", params, timeout_ms)
-  if not results then
-    return
-  end
+	local results = vim.lsp.buf_request_sync(buf, "textDocument/codeAction", params, timeout_ms)
+	if not results then
+		return
+	end
 
-  for _, result in pairs(results) do
-    for _, action in pairs(result.result or {}) do
-      if action.kind == kind then
-        handle_action_sync(action, buf, timeout_ms, 0)
-      end
-    end
-  end
+	for _, result in pairs(results) do
+		for _, action in pairs(result.result or {}) do
+			if action.kind == kind then
+				handle_action_sync(action, buf, timeout_ms, 0)
+			end
+		end
+	end
 end
 
 ---@param kinds KindList
 ---@param buf integer
 ---@param timeout_ms? ActionTimeoutMs
 function M.apply(kinds, buf, timeout_ms)
-  timeout_ms = timeout_ms or 100
-  for _, kind in ipairs(kinds) do
-    apply_kind(kind, buf, timeout_ms)
-  end
+	timeout_ms = timeout_ms or 100
+	for _, kind in ipairs(kinds) do
+		apply_kind(kind, buf, timeout_ms)
+	end
 end
 
 function M.register(pattern, kinds, timeout_ms)
-  vim.api.nvim_create_autocmd("BufWritePre", {
-    pattern = pattern,
-    callback = function(args)
-      M.apply(kinds, args.buf, timeout_ms)
-    end,
-    desc = "Auto-run code actions " .. table.concat(kinds, ", ") .. " on save",
-  })
+	vim.api.nvim_create_autocmd("BufWritePre", {
+		pattern = pattern,
+		callback = function(args)
+			M.apply(kinds, args.buf, timeout_ms)
+		end,
+		desc = "Auto-run code actions " .. table.concat(kinds, ", ") .. " on save",
+	})
 end
 
 return M
